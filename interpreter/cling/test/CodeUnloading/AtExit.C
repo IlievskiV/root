@@ -46,7 +46,7 @@ cling::Interpreter * gChild = 0;
   ChildInterp.execute("atexit(atexit_c);");
 }
 // ChildInterp
-// CHECK-NEXT: atexit_c 1
+// CHECK: atexit_c 1
 
 static void atexit_f() {
   printf("atexit_f %s\n", gCling==__dso_handle ? "true" : "false");

@@ -201,6 +201,10 @@ install:
 
   if [ "$COMPILER" == "g++-6" ]; then
     export CLING_BUILD_FLAGS="-DCMAKE_CXX_STANDARD=17 -DCMAKE_CXX_STANDARD_REQUIRED=ON"
+    # On OS X force the test to reproduce __float128 issues with libstdc++.
+    if [ $TRAVIS_OS_NAME != 'osx' ]; then
+      export CLING_BUILD_FLAGS="$CLING_BUILD_FLAGS -DCXX_EXTENSIONS=OFF"
+    fi
     CMAKEREQ="3.8"
   else
     CMAKEREQ="3.6"
@@ -241,16 +245,24 @@ before_script:
    if [ -n "$NIGHTLY_CRON_SYNC" ] && [ "$TRAVIS_EVENT_TYPE" = "cron" ] \
       && [ "$TRAVIS_BRANCH" == "master" ] && [ "$TRAVIS_PULL_REQUEST" == "false" ] \
       && [ "$TRAVIS_REPO_SLUG" == "vgvassilev/cling" ] ; then
+      # Override the default travis clone command to enable sync.
+      cd ../../ && rm -fr ${TRAVIS_REPO_SLUG}
+      git clone https://$OAUTH_TOKEN@github.com/${TRAVIS_REPO_SLUG} ${TRAVIS_REPO_SLUG}
+      cd ${TRAVIS_REPO_SLUG}
+
       echo "Syncing repository."
       git remote add alt http://root.cern.ch/git/cling.git
       git pull alt master
-      git remote remove origin
-      git remote add origin https://$OAUTH_TOKEN@github.com/${TRAVIS_REPO_SLUG}
-      git push --verbose origin master
 
       # Move the tag to newest master
-      git tag --force cling-nightlies HEAD
+      git tag --force cling-nightlies master
+
+      # Push to origin
+      git push --verbose origin master
       git push --verbose --force origin cling-nightlies
+
+      # Some debug output.
+      git remote -v && git branch -a
    fi
 
 script:
@@ -265,7 +277,7 @@ script:
       --skip-cleanup
   else
     tools/packaging/cpt.py \
-      --tarball-tag=$TRAVIS_TAG \
+      --tarball-tag=$([[ $TRAVIS_TAG = cling-nightlies ]] && echo "master" || echo "$TRAVIS_TAG") \
       --with-cling-url=https://github.com/$TRAVIS_REPO_SLUG \
       --with-clang-url=http://root.cern.ch/git/clang.git \
       --with-llvm-url=http://root.cern.ch/git/llvm.git \

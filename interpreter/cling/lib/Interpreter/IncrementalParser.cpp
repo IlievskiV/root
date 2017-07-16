@@ -50,8 +50,6 @@
 #include "llvm/Support/CrashRecoveryContext.h"
 #include "llvm/Support/MemoryBuffer.h"
 
-#include <iostream>
-#include <sstream>
 #include <stdio.h>
 
 using namespace clang;
@@ -165,10 +163,11 @@ namespace {
 } // unnamed namespace
 
 namespace cling {
-  IncrementalParser::IncrementalParser(Interpreter* interp, const char* llvmdir):
-    m_Interpreter(interp),
-    m_CI(CIFactory::createCI("", interp->getOptions(), llvmdir)),
-    m_Consumer(nullptr), m_ModuleNo(0) {
+  IncrementalParser::IncrementalParser(Interpreter* interp, const char* llvmdir)
+      : m_Interpreter(interp),
+        m_CI(CIFactory::createCI("", interp->getOptions(), llvmdir,
+                                 m_Consumer = new cling::DeclCollector())),
+        m_ModuleNo(0) {
 
     if (!m_CI) {
       cling::errs() << "Compiler instance could not be created.\n";
@@ -178,7 +177,6 @@ namespace cling {
     if (m_Interpreter->getOptions().CompilerOpts.HasOutput)
       return;
 
-    m_Consumer = dyn_cast<DeclCollector>(&m_CI->getSema().getASTConsumer());
     if (!m_Consumer) {
       cling::errs() << "No AST consumer available.\n";
       return;
@@ -187,13 +185,13 @@ namespace cling {
     DiagnosticsEngine& Diag = m_CI->getDiagnostics();
     if (m_CI->getFrontendOpts().ProgramAction != frontend::ParseSyntaxOnly) {
       m_CodeGen.reset(CreateLLVMCodeGen(
-          Diag, "cling-module-0", m_CI->getHeaderSearchOpts(),
+          Diag, makeModuleName(), m_CI->getHeaderSearchOpts(),
           m_CI->getPreprocessorOpts(), m_CI->getCodeGenOpts(),
           *m_Interpreter->getLLVMContext()));
-      m_Consumer->setContext(this, m_CodeGen.get());
-    } else {
-      m_Consumer->setContext(this, 0);
     }
+
+    // Initialize the DeclCollector and add callbacks keeping track of macros.
+    m_Consumer->Setup(this, m_CodeGen.get(), m_CI->getPreprocessor());
 
     m_DiagConsumer.reset(new FilteringDiagConsumer(Diag, false));
 
@@ -377,6 +375,16 @@ namespace cling {
     return ParseResultTransaction(T, ParseResult);
   }
 
+  std::string IncrementalParser::makeModuleName() {
+    return std::string("cling-module-") + std::to_string(m_ModuleNo++);
+  }
+
+  llvm::Module* IncrementalParser::StartModule() {
+    return getCodeGenerator()->StartModule(makeModuleName(),
+                                           *m_Interpreter->getLLVMContext(),
+                                           getCI()->getCodeGenOpts());
+  }
+
   void IncrementalParser::commitTransaction(ParseResultTransaction& PRT,
                                             bool ClearDiagClient) {
     Transaction* T = PRT.getPointer();
@@ -424,14 +432,10 @@ namespace cling {
       PRT.setInt(kFailed);
       m_Interpreter->unload(*T);
 
-      if (MustStartNewModule) {
-        // Create a new module.
-        stdstrstream ModuleName;
-        ModuleName << "cling-module-" << ++m_ModuleNo;
-        getCodeGenerator()->StartModule(ModuleName.str(),
-                                        *m_Interpreter->getLLVMContext(),
-                                        getCI()->getCodeGenOpts());
-      }
+      // Create a new module if necessary.
+      if (MustStartNewModule)
+        StartModule();
+
       return;
     }
 
@@ -549,11 +553,7 @@ namespace cling {
       }
 
       // Create a new module.
-      smallstream ModuleName;
-      ModuleName << "cling-module-" << ++m_ModuleNo;
-      getCodeGenerator()->StartModule(ModuleName.str(),
-                                      *m_Interpreter->getLLVMContext(),
-                                      getCI()->getCodeGenOpts());
+      StartModule();
     }
   }
 
@@ -664,7 +664,7 @@ namespace cling {
     assert(PP.isIncrementalProcessingEnabled() && "Not in incremental mode!?");
     PP.enableIncrementalProcessing();
 
-    std::ostringstream source_name;
+    smallstream source_name;
     source_name << "input_line_" << (m_MemoryBuffers.size() + 1);
 
     // Create an uninitialized memory buffer, copy code in and append "\n"

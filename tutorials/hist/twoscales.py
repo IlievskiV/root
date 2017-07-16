@@ -24,7 +24,7 @@ ROOT.gStyle.SetOptStat(False)
 
 h1 = ROOT.TH1F("h1","my histogram",100,-3,3)
 
-for i in xrange(10000) :
+for i in range(10000) :
     h1.Fill(ROOT.gRandom.Gaus(0,1))
 
 h1.Draw()
@@ -32,7 +32,7 @@ h1.Draw()
 hint1 = ROOT.TH1F("hint1","h1 bins integral",100,-3,3)
 
 sum = 0
-for i in xrange(1,101) :
+for i in range(1,101) :
    sum += h1.GetBinContent(i)
    hint1.SetBinContent(i,sum)
 

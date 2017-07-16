@@ -400,13 +400,7 @@ TF1 *TF1::fgCurrent = 0;
 
 TF1::TF1():
    TNamed(), TAttLine(), TAttFill(), TAttMarker(),
-   fXmin(0), fXmax(0), fNpar(0), fNdim(0),
-   fNpx(100), fType(0),
-   fNpfits(0), fNDF(0), fChisquare(0),
-   fMinimum(-1111), fMaximum(-1111),
-   fParent(0), fHistogram(0),
-   fMethodCall(0), fNormalized(false), fNormIntegral(0),
-   fFormula(0), fParams(0)
+   fXmin(0), fXmax(0), fNpar(0), fNdim(0), fType(EFType::kFormula)
 {
    SetFillStyle(0);
 }
@@ -427,13 +421,7 @@ TF1::TF1():
 /// titles for the X and Y axis respectively.
 
 TF1::TF1(const char *name, const char *formula, Double_t xmin, Double_t xmax, EAddToList addToGlobList) :
-   TNamed(name, formula), TAttLine(), TAttFill(), TAttMarker(),
-   fNpx(100), fType(0),
-   fNpfits(0), fNDF(0), fChisquare(0),
-   fMinimum(-1111), fMaximum(-1111),
-   fParent(0), fHistogram(0),
-   fMethodCall(0), fNormalized(false), fNormIntegral(0),
-   fFormula(0), fParams(0)
+   TNamed(name, formula), TAttLine(), TAttFill(), TAttMarker(), fType(EFType::kFormula)
 {
    if (xmin < xmax) {
       fXmin      = xmin;
@@ -474,19 +462,7 @@ TF1::TF1(const char *name, const char *formula, Double_t xmin, Double_t xmax, EA
 /// WARNING! A function created with this constructor cannot be Cloned.
 
 TF1::TF1(const char *name, Double_t xmin, Double_t xmax, Int_t npar, Int_t ndim, EAddToList addToGlobList) :
-   TNamed(name, name), TAttLine(), TAttFill(), TAttMarker(),
-   fXmin(xmin), fXmax(xmax),
-   fNpar(npar), fNdim(ndim),
-   fNpx(100), fType(2),
-   fNpfits(0), fNDF(0), fChisquare(0),
-   fMinimum(-1111), fMaximum(-1111),
-   fParErrors(std::vector<Double_t>(npar)),
-   fParMin(std::vector<Double_t>(npar)),
-   fParMax(std::vector<Double_t>(npar)),
-   fParent(0), fHistogram(0),
-   fMethodCall(0), fNormalized(false), fNormIntegral(0),
-   fFormula(0),
-   fParams(new TF1Parameters(npar))
+   TF1(EFType::kInterpreted, name, xmin, xmax, npar, ndim, addToGlobList, new TF1Parameters(npar))
 {
    if (fName == "*") {
       Info("TF1", "TF1 has name * - it is not well defined");
@@ -503,8 +479,6 @@ TF1::TF1(const char *name, Double_t xmin, Double_t xmax, Int_t npar, Int_t ndim,
       Error("TF1", "No function found with the signature %s(Double_t*,Double_t*)", name);
       return;
    }
-
-   DoInitialize(addToGlobList);
 }
 
 
@@ -522,58 +496,8 @@ TF1::TF1(const char *name, Double_t xmin, Double_t xmax, Int_t npar, Int_t ndim,
 /// WARNING! A function created with this constructor cannot be Cloned.
 
 TF1::TF1(const char *name, Double_t (*fcn)(Double_t *, Double_t *), Double_t xmin, Double_t xmax, Int_t npar, Int_t ndim, EAddToList addToGlobList) :
-   TNamed(name, name), TAttLine(), TAttFill(), TAttMarker(),
-   fXmin(xmin), fXmax(xmax),
-   fNpar(npar), fNdim(ndim),
-   fNpx(100), fType(1),
-   fNpfits(0), fNDF(0), fChisquare(0),
-   fMinimum(-1111), fMaximum(-1111),
-   fParErrors(std::vector<Double_t>(npar)),
-   fParMin(std::vector<Double_t>(npar)),
-   fParMax(std::vector<Double_t>(npar)),
-   fParent(0), fHistogram(0),
-   fMethodCall(0),
-   fNormalized(false), fNormIntegral(0),
-   fFunctor(new TF1FunctorPointerImpl<double>(ROOT::Math::ParamFunctor(fcn))),
-   fFormula(0),
-   fParams(new TF1Parameters(npar))
-
-{
-   DoInitialize(addToGlobList);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// Constructor using a pointer to real function.
-///
-/// \param npar is the number of free parameters used by the function
-///
-/// This constructor creates a function of type C when invoked
-/// with the normal C++ compiler.
-///
-/// see test program test/stress.cxx (function stress1) for an example.
-/// note the interface with an intermediate pointer.
-///
-/// WARNING! A function created with this constructor cannot be Cloned.
-
-TF1::TF1(const char *name, Double_t (*fcn)(const Double_t *, const Double_t *), Double_t xmin, Double_t xmax, Int_t npar, Int_t ndim, EAddToList addToGlobList) :
-   TNamed(name, name), TAttLine(), TAttFill(), TAttMarker(),
-   fXmin(xmin), fXmax(xmax),
-   fNpar(npar), fNdim(ndim),
-   fNpx(100), fType(1),
-   fNpfits(0), fNDF(0), fChisquare(0),
-   fMinimum(-1111), fMaximum(-1111),
-   fParErrors(std::vector<Double_t>(npar)),
-   fParMin(std::vector<Double_t>(npar)),
-   fParMax(std::vector<Double_t>(npar)),
-   fParent(0), fHistogram(0),
-   fMethodCall(0),
-   fNormalized(false), fNormIntegral(0),
-   fFunctor(new TF1FunctorPointerImpl<double>(ROOT::Math::ParamFunctor(fcn))),
-   fFormula(0),
-   fParams(new TF1Parameters(npar))
-{
-   DoInitialize(addToGlobList);
-}
+   TF1(EFType::kPtrScalarFreeFcn, name, xmin, xmax, npar, ndim, addToGlobList, new TF1Parameters(npar), new TF1FunctorPointerImpl<double>(ROOT::Math::ParamFunctor(fcn)))
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -588,25 +512,8 @@ TF1::TF1(const char *name, Double_t (*fcn)(const Double_t *, const Double_t *), 
 /// WARNING! A function created with this constructor cannot be Cloned.
 
 TF1::TF1(const char *name, ROOT::Math::ParamFunctor f, Double_t xmin, Double_t xmax, Int_t npar, Int_t ndim, EAddToList addToGlobList) :
-   TNamed(name, name), TAttLine(), TAttFill(), TAttMarker(),
-   fXmin(xmin), fXmax(xmax),
-   fNpar(npar), fNdim(ndim),
-   fNpx(100), fType(1),
-   fNpfits(0), fNDF(0), fChisquare(0),
-   fMinimum(-1111), fMaximum(-1111),
-   fParErrors(std::vector<Double_t>(npar)),
-   fParMin(std::vector<Double_t>(npar)),
-   fParMax(std::vector<Double_t>(npar)),
-   fParent(0), fHistogram(0),
-   fMethodCall(0),
-   fNormalized(false), fNormIntegral(0),
-   fFunctor(new TF1FunctorPointerImpl<double>(ROOT::Math::ParamFunctor(f))),
-   fFormula(0),
-   fParams(new TF1Parameters(npar))
-
-{
-   DoInitialize(addToGlobList);
-}
+   TF1(EFType::kPtrScalarFreeFcn, name, xmin, xmax, npar, ndim, addToGlobList, new TF1Parameters(npar), new TF1FunctorPointerImpl<double>(ROOT::Math::ParamFunctor(f)))
+{}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Common initialization of the TF1. Add to the global list and
@@ -730,14 +637,7 @@ TF1::~TF1()
 
 TF1::TF1(const TF1 &f1) :
    TNamed(f1), TAttLine(f1), TAttFill(f1), TAttMarker(f1),
-   fXmin(0), fXmax(0), fNpar(0), fNdim(0),
-   fNpx(100), fType(0),
-   fNpfits(0), fNDF(0), fChisquare(0),
-   fMinimum(-1111), fMaximum(-1111),
-   fParent(0), fHistogram(0),
-   fMethodCall(0),
-   fNormalized(false), fNormIntegral(0),
-   fFormula(0), fParams(0)
+   fXmin(0), fXmax(0), fNpar(0), fNdim(0), fType(EFType::kFormula)
 {
    ((TF1 &)f1).Copy(*this);
 }
@@ -786,7 +686,6 @@ void TF1::Copy(TObject &obj) const
    ((TF1 &)obj).fNdim = fNdim;
    ((TF1 &)obj).fType = fType;
    ((TF1 &)obj).fFunctor   = fFunctor;
-   ((TF1 &)obj).fFunctp   = fFunctp;
    ((TF1 &)obj).fChisquare = fChisquare;
    ((TF1 &)obj).fNpfits  = fNpfits;
    ((TF1 &)obj).fNDF     = fNDF;
@@ -3384,7 +3283,7 @@ void TF1::Streamer(TBuffer &b)
          SetParameters(fold.GetParameters());
          // copy the other data members
          fNpx = fold.fNpx;
-         fType = fold.fType;
+         fType = (EFType) fold.fType;
          fNpfits = fold.fNpfits;
          fNDF = fold.fNDF;
          fChisquare = fold.fChisquare;

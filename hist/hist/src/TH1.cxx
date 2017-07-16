@@ -53,15 +53,15 @@
 /** \addtogroup Hist
 @{
 \class TH1C
-\brief tomato 1-D histogram with a byte per channel (see TH1 documentation)
+\brief 1-D histogram with a byte per channel (see TH1 documentation)
 \class TH1S
-\brief tomato 1-D histogram with a short per channel (see TH1 documentation)
+\brief 1-D histogram with a short per channel (see TH1 documentation)
 \class TH1I
-\brief tomato 1-D histogram with an int per channel (see TH1 documentation)}
+\brief 1-D histogram with an int per channel (see TH1 documentation)}
 \class TH1F
-\brief tomato 1-D histogram with a float per channel (see TH1 documentation)}
+\brief 1-D histogram with a float per channel (see TH1 documentation)}
 \class TH1D
-\brief tomato 1-D histogram with a double per channel (see TH1 documentation)}
+\brief 1-D histogram with a double per channel (see TH1 documentation)}
 @}
 */
 
@@ -293,7 +293,7 @@ When using the options 2 or 3 above, the labels are automatically
  By default, the bin number is computed using the current axis ranges.
  If the automatic binning option has been set via
 ~~~ {.cpp}
-       h->SetCanExtend(kAllAxes);
+       h->SetCanExtend(TH1::kAllAxes);
 ~~~
  then, the Fill Function will automatically extend the axis range to
  accomodate the new value specified in the Fill argument. The method
@@ -668,9 +668,9 @@ TH1::TH1(const char *name,const char *title,Int_t nbins,const Float_t *xbins)
 ///
 /// \param[in] name name of histogram (avoid blanks)
 /// \param[in] title histogram title.
-///        If title is of the form "stringt;stringx;stringy;stringz"
-///        the histogram title is set to stringt,
-///        the x axis title to stringy, the y axis title to stringy, etc.
+///        If title is of the form `stringt;stringx;stringy;stringz`
+///        the histogram title is set to `stringt`,
+///        the x axis title to `stringy`, the y axis title to `stringy`, etc.
 /// \param[in] nbins number of bins
 /// \param[in] xbins array of low-edges for each bin.
 ///        This is an array of size nbins+1
@@ -3236,8 +3236,10 @@ void TH1::FillN(Int_t ntimes, const Double_t *x, const Double_t *w, Int_t stride
          else BufferFill(x[i], 1.);
       }
       // fill the remaining entries if the buffer has been deleted
-      if (i < ntimes && fBuffer==0)
-         DoFillN((ntimes-i)/stride,&x[i],&w[i],stride);
+      if (i < ntimes && fBuffer==0) {
+         auto weights = w ? &w[i] : nullptr;
+         DoFillN((ntimes-i)/stride,&x[i],weights,stride);
+      }
       return;
    }
    // call internal method

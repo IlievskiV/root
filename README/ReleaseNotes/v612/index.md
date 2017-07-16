@@ -39,6 +39,10 @@ The following people have contributed to this new version:
 
 The following interfaces have been removed, after deprecation in v6.10.
 
+- Remove the deprecated `TSelectorCint.h` and `TSelectorCint.cxx`.
+- Remove the deprecated `Riosfwd.h` and `Rtypeinfo.h`.
+
+
 ### TTreeReader
 
 `TTreeReader::SetLastEntry()` was replaced by `TTreeReader::SetEntriesRange()`.
@@ -59,8 +63,8 @@ or will be set to the address of the histogram read from the file.
 
 ## TTree Libraries
 
-- Resolved O(N^2) scaling problem in ```TTree::Draw()``` observed when a branch that contains a 
-large TClonesArray where each element contains another small vector container. 
+- Resolved O(N^2) scaling problem in ```TTree::Draw()``` observed when a branch that contains a
+large TClonesArray where each element contains another small vector container.
 
 ## Histogram Libraries
 
@@ -80,6 +84,16 @@ large TClonesArray where each element contains another small vector container.
     -  LogZ for violins
     -  scaling of candles and violins with respect to each other
     -  static functions for WhiskerRange and BoxRange
+  - In some case it was not somme possible to zoom a 1D histogram using the mouse
+    on the X axis. This was described
+    [here](https://root-forum.cern.ch/t/axis-blocked-when-overlaying-two-histograms/25326)
+  - When drawing an histogram with option "BOX" with log scale along the Z axis
+    the bins were not visible in some case. This was described
+    [here](https://root-forum.cern.ch/t/set-logscale-on-z-axis-in-2d-histo/25385).
+  - When a TGraph2D was plotted with the option "PCOLZ" with a log scale along the
+    Z axis, there was a mismatch between the markers' colors and the color palette
+    displayed. It is now fixed. It was reported
+    [here](https://sft.its.cern.ch/jira/browse/ROOT-8200).
 
 ## 3D Graphics Libraries
 

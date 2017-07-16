@@ -3209,10 +3209,10 @@ Int_t THistPainter::DistancetoPrimitive(Int_t px, Int_t py)
          Int_t pybinmax = gPad->YtoAbsPixel(gPad->YtoPad(binvalmin));
          if (py<pybinmax+kMaxDiff/2 && py>pybinmin-kMaxDiff/2) pybin = py;
       }
-      if (bin != binsup) { // Mouse on bin border border
-         Double_t binsupval = factor*fH->GetBinContent(binsup);
-         Int_t pybinsub     = gPad->YtoAbsPixel(gPad->YtoPad(binsupval));
-         if (py <= TMath::Max(pybinsub,pybin) && py >= TMath::Min(pybinsub,pybin)) return 0;
+      if (bin != binsup) { // Mouse on bin border
+        Double_t binsupval = factor*fH->GetBinContent(binsup);
+        Int_t pybinsub     = gPad->YtoAbsPixel(gPad->YtoPad(binsupval));
+        if (py <= TMath::Max(pybinsub,pybin) && py >= TMath::Min(pybinsub,pybin) && pybin != 10000) return 0;
       }
       if (TMath::Abs(py - pybin) <= kMaxDiff) return TMath::Abs(py - pybin);
    } else {
@@ -4793,6 +4793,7 @@ void THistPainter::PaintBoxes(Option_t *)
    Double_t zmin = TMath::Max(fH->GetMinimum(),0.);
    Double_t zmax = TMath::Max(TMath::Abs(fH->GetMaximum()),
                               TMath::Abs(fH->GetMinimum()));
+   Double_t zminlin = zmin, zmaxlin = zmax;
 
    // In case of option SAME, zmin and zmax values are taken from the
    // first plotted 2D histogram.
@@ -4804,6 +4805,8 @@ void THistPainter::PaintBoxes(Option_t *)
          zmin = TMath::Max(h2->GetMinimum(), 0.);
          zmax = TMath::Max(TMath::Abs(h2->GetMaximum()),
                            TMath::Abs(h2->GetMinimum()));
+         zminlin = zmin;
+         zmaxlin = zmax;
          if (Hoption.Logz) {
             if (zmin <= 0) {
                zmin = TMath::Log10(zmax*0.001);
@@ -4852,8 +4855,8 @@ void THistPainter::PaintBoxes(Option_t *)
          z     = Hparam.factor*fH->GetBinContent(bin);
          kZNeg = kFALSE;
 
-         if (TMath::Abs(z) <  zmin) continue; // Can be the case with ...
-         if (TMath::Abs(z) >  zmax) z = zmax; // ... option Same
+         if (TMath::Abs(z) <  zminlin) continue; // Can be the case with ...
+         if (TMath::Abs(z) >  zmaxlin) z = zmaxlin; // ... option Same
          if (kZminNeg && z==0) continue;      // Do not draw empty bins if case of histo with netgative bins.
 
          if (z < 0) {
@@ -7851,6 +7854,7 @@ void THistPainter::PaintLegoAxis(TGaxis *axis, Double_t ang)
    if (TMath::Abs(y1[0] - y2[0]) >= epsil || TMath::Abs(y1[1] - y2[1]) > epsil) {
       axis->ImportAxisAttributes(fYaxis);
       axis->SetLabelOffset(fYaxis->GetLabelOffset()+fYaxis->GetTickLength());
+      if (fYaxis->GetTitleOffset() == 0) axis->SetTitleOffset(1.5);
 
       if (fH->GetDimension() < 2) {
          strlcpy(chopay, "V=+UN",8);
