@@ -183,7 +183,7 @@ public:
    /// \brief Append a filter to the call graph.
    /// \param[in] f Function, lambda expression, functor class or any other callable object. It must return a `bool`
    /// signalling whether the event has passed the selection (true) or not (false).
-   /// \param[in] bn Names of the branches in input to the filter function.
+   /// \param[in] columns Names of the branches in input to the filter function.
    /// \param[in] name Optional name of this filter. See `Report`.
    ///
    /// Append a filter node at the point of the call graph corresponding to the
@@ -199,18 +199,16 @@ public:
    /// it is executed once per entry. If its result is requested more than
    /// once, the cached result is served.
    template <typename F, typename std::enable_if<!std::is_convertible<F, std::string>::value, int>::type = 0>
-   TInterface<TFilterBase> Filter(F f, const ColumnNames_t &bn = {}, std::string_view name = "")
+   TInterface<TFilterBase> Filter(F f, const ColumnNames_t &columns = {}, std::string_view name = "")
    {
       TDFInternal::CheckFilter(f);
-      auto df = GetDataFrameChecked();
-      const ColumnNames_t &defBl = df->GetDefaultColumnNames();
-      auto nArgs = TTraits::CallableTraits<F>::arg_types::list_size;
-      const auto actualBl = TDFInternal::SelectColumns(nArgs, bn, defBl);
-      using DFF_t = TDFDetail::TFilter<F, Proxied>;
-      auto FilterPtr = std::make_shared<DFF_t>(std::move(f), actualBl, *fProxiedPtr, name);
-      df->Book(FilterPtr);
-      TInterface<TFilterBase> tdf_f(FilterPtr, fImplWeakPtr);
-      return tdf_f;
+      auto loopManager = GetDataFrameChecked();
+      const auto nColumns = TTraits::CallableTraits<F>::arg_types::list_size;
+      const auto validColumnNames = GetValidatedColumnNames(*loopManager, nColumns, columns);
+      using loopManagerF_t = TDFDetail::TFilter<F, Proxied>;
+      auto FilterPtr = std::make_shared<loopManagerF_t>(std::move(f), validColumnNames, *fProxiedPtr, name);
+      loopManager->Book(FilterPtr);
+      return TInterface<TFilterBase>(FilterPtr, fImplWeakPtr);
    }
 
    ////////////////////////////////////////////////////////////////////////////
@@ -261,7 +259,7 @@ public:
    /// \param[in] name The name of the temporary branch.
    /// \param[in] expression Function, lambda expression, functor class or any other callable object producing the
    /// temporary value. Returns the value that will be assigned to the temporary branch.
-   /// \param[in] bl Names of the branches in input to the producer function.
+   /// \param[in] columns Names of the branches in input to the producer function.
    ///
    /// Create a temporary branch that will be visible from all subsequent nodes
    /// of the functional chain. The `expression` is only evaluated for entries that pass
@@ -278,19 +276,17 @@ public:
    /// An exception is thrown if the name of the new branch is already in use
    /// for another branch in the TTree.
    template <typename F, typename std::enable_if<!std::is_convertible<F, std::string>::value, int>::type = 0>
-   TInterface<TCustomColumnBase> Define(std::string_view name, F expression, const ColumnNames_t &bl = {})
+   TInterface<TCustomColumnBase> Define(std::string_view name, F expression, const ColumnNames_t &columns = {})
    {
-      auto df = GetDataFrameChecked();
-      TDFInternal::CheckTmpBranch(name, df->GetTree());
-      const ColumnNames_t &defBl = df->GetDefaultColumnNames();
-      auto nArgs = TTraits::CallableTraits<F>::arg_types::list_size;
-      const auto actualBl = TDFInternal::SelectColumns(nArgs, bl, defBl);
-      using DFB_t = TDFDetail::TCustomColumn<F, Proxied>;
+      auto loopManager = GetDataFrameChecked();
+      TDFInternal::CheckTmpBranch(name, loopManager->GetTree());
+      auto nColumns = TTraits::CallableTraits<F>::arg_types::list_size;
+      const auto validColumnNames = GetValidatedColumnNames(*loopManager, nColumns, columns);
+      using loopManagerB_t = TDFDetail::TCustomColumn<F, Proxied>;
       const std::string nameInt(name);
-      auto BranchPtr = std::make_shared<DFB_t>(nameInt, std::move(expression), actualBl, *fProxiedPtr);
-      df->Book(BranchPtr);
-      TInterface<TCustomColumnBase> tdf_b(BranchPtr, fImplWeakPtr);
-      return tdf_b;
+      auto BranchPtr = std::make_shared<loopManagerB_t>(nameInt, std::move(expression), validColumnNames, *fProxiedPtr);
+      loopManager->Book(BranchPtr);
+      return TInterface<TCustomColumnBase>(BranchPtr, fImplWeakPtr);
    }
 
    ////////////////////////////////////////////////////////////////////////////
@@ -463,7 +459,7 @@ public:
    /// \brief Execute a user-defined function requiring a processing slot index on each entry (*instant action*)
    /// \param[in] f Function, lambda expression, functor class or any other callable object performing user defined
    /// calculations.
-   /// \param[in] bl Names of the branches in input to the user function.
+   /// \param[in] columns Names of the branches in input to the user function.
    ///
    /// Same as `Foreach`, but the user-defined function takes an extra
    /// `unsigned int` as its first parameter, the *processing slot index*.
@@ -476,16 +472,15 @@ public:
    /// `ForeachSlot` works just as well with single-thread execution: in that
    /// case `slot` will always be `0`.
    template <typename F>
-   void ForeachSlot(F f, const ColumnNames_t &bl = {})
+   void ForeachSlot(F f, const ColumnNames_t &columns = {})
    {
-      auto df = GetDataFrameChecked();
-      const ColumnNames_t &defBl = df->GetDefaultColumnNames();
-      auto nArgs = TTraits::CallableTraits<F>::arg_types::list_size;
-      const auto actualBl = TDFInternal::SelectColumns(nArgs - 1, bl, defBl);
+      auto loopManager = GetDataFrameChecked();
+      auto nColumns = TTraits::CallableTraits<F>::arg_types::list_size - 1;
+      const auto validColumnNames = GetValidatedColumnNames(*loopManager, nColumns, columns);
       using Helper_t = TDFInternal::ForeachSlotHelper<F>;
       using Action_t = TDFInternal::TAction<Helper_t, Proxied>;
-      df->Book(std::make_shared<Action_t>(Helper_t(std::move(f)), actualBl, *fProxiedPtr));
-      df->Run();
+      loopManager->Book(std::make_shared<Action_t>(Helper_t(std::move(f)), validColumnNames, *fProxiedPtr));
+      loopManager->Run();
    }
 
    ////////////////////////////////////////////////////////////////////////////
@@ -526,15 +521,15 @@ public:
    {
       using arg_types = typename TTraits::CallableTraits<F>::arg_types;
       TDFInternal::CheckReduce(f, arg_types());
-      auto df = GetDataFrameChecked();
-      const auto &defBl = df->GetDefaultColumnNames();
-      const ColumnNames_t userColumns = columnName.empty() ? ColumnNames_t() : ColumnNames_t({std::string(columnName)});
-      const auto actualBl = TDFInternal::SelectColumns(1, userColumns, defBl);
+      auto loopManager = GetDataFrameChecked();
+      const auto columns = columnName.empty() ? ColumnNames_t() : ColumnNames_t({std::string(columnName)});
+      const auto validColumnNames = GetValidatedColumnNames(*loopManager, 1, columns);
       auto redObjPtr = std::make_shared<T>(initValue);
       using Helper_t = TDFInternal::ReduceHelper<F, T>;
       using Action_t = typename TDFInternal::TAction<Helper_t, Proxied>;
-      df->Book(std::make_shared<Action_t>(Helper_t(std::move(f), redObjPtr, df->GetNSlots()), actualBl, *fProxiedPtr));
-      return MakeResultProxy(redObjPtr, df);
+      loopManager->Book(std::make_shared<Action_t>(Helper_t(std::move(f), redObjPtr, loopManager->GetNSlots()),
+                                                   validColumnNames, *fProxiedPtr));
+      return MakeResultProxy(redObjPtr, loopManager);
    }
 
    ////////////////////////////////////////////////////////////////////////////
@@ -571,23 +566,22 @@ public:
    /// \brief Return a collection of values of a branch (*lazy action*)
    /// \tparam T The type of the branch.
    /// \tparam COLL The type of collection used to store the values.
-   /// \param[in] branchName The name of the branch of which the values are to be collected
+   /// \param[in] column The name of the branch of which the values are to be collected
    ///
    /// This action is *lazy*: upon invocation of this method the calculation is
    /// booked but not executed. See TResultProxy documentation.
    template <typename T, typename COLL = std::vector<T>>
-   TResultProxy<COLL> Take(std::string_view branchName = "")
+   TResultProxy<COLL> Take(std::string_view column = "")
    {
-      auto df = GetDataFrameChecked();
-      unsigned int nSlots = df->GetNSlots();
-      const ColumnNames_t &defBl = df->GetDefaultColumnNames();
-      const ColumnNames_t userColumns = branchName.empty() ? ColumnNames_t() : ColumnNames_t({std::string(branchName)});
-      const auto bl = TDFInternal::SelectColumns(1, userColumns, defBl);
-      auto valuesPtr = std::make_shared<COLL>();
+      auto loopManager = GetDataFrameChecked();
+      const auto columns = column.empty() ? ColumnNames_t() : ColumnNames_t({std::string(column)});
+      const auto validColumnNames = GetValidatedColumnNames(*loopManager, 1, columns);
       using Helper_t = TDFInternal::TakeHelper<T, COLL>;
       using Action_t = TDFInternal::TAction<Helper_t, Proxied>;
-      df->Book(std::make_shared<Action_t>(Helper_t(valuesPtr, nSlots), bl, *fProxiedPtr));
-      return MakeResultProxy(valuesPtr, df);
+      auto valuesPtr = std::make_shared<COLL>();
+      const auto nSlots = loopManager->GetNSlots();
+      loopManager->Book(std::make_shared<Action_t>(Helper_t(valuesPtr, nSlots), validColumnNames, *fProxiedPtr));
+      return MakeResultProxy(valuesPtr, loopManager);
    }
 
    ////////////////////////////////////////////////////////////////////////////
@@ -1038,15 +1032,15 @@ private:
    // Type was specified by the user, no need to infer it
    template <typename ActionType, typename... BranchTypes, typename ActionResultType,
              typename std::enable_if<!TDFInternal::TNeedJitting<BranchTypes...>::value, int>::type = 0>
-   TResultProxy<ActionResultType> CreateAction(const ColumnNames_t &bl, const std::shared_ptr<ActionResultType> &r)
+   TResultProxy<ActionResultType> CreateAction(const ColumnNames_t &columns, const std::shared_ptr<ActionResultType> &r)
    {
-      auto df = GetDataFrameChecked();
-      const ColumnNames_t &defBl = df->GetDefaultColumnNames();
-      auto nColumns = sizeof...(BranchTypes);
-      const auto actualBl = TDFInternal::SelectColumns(nColumns, bl, defBl);
-      unsigned int nSlots = df->GetNSlots();
-      TDFInternal::BuildAndBook<BranchTypes...>(actualBl, r, nSlots, *df, *fProxiedPtr, (ActionType *)nullptr);
-      return MakeResultProxy(r, df);
+      auto loopManager = GetDataFrameChecked();
+      const auto nColumns = sizeof...(BranchTypes);
+      const auto validColumnNames = GetValidatedColumnNames(*loopManager, nColumns, columns);
+      const auto nSlots = fProxiedPtr->GetNSlots();
+      TDFInternal::BuildAndBook<BranchTypes...>(validColumnNames, r, nSlots, *loopManager, *fProxiedPtr,
+                                                (ActionType *)nullptr);
+      return MakeResultProxy(r, loopManager);
    }
 
    // User did not specify type, do type inference
@@ -1054,21 +1048,21 @@ private:
    // this action is taken equal to nColumns, otherwise it is assumed to be sizeof...(BranchTypes)
    template <typename ActionType, typename... BranchTypes, typename ActionResultType,
              typename std::enable_if<TDFInternal::TNeedJitting<BranchTypes...>::value, int>::type = 0>
-   TResultProxy<ActionResultType> CreateAction(const ColumnNames_t &bl, const std::shared_ptr<ActionResultType> &r,
+   TResultProxy<ActionResultType> CreateAction(const ColumnNames_t &columns, const std::shared_ptr<ActionResultType> &r,
                                                const int nColumns = -1)
    {
-      auto df = GetDataFrameChecked();
-      const ColumnNames_t &defBl = df->GetDefaultColumnNames();
-      const auto actualBl = TDFInternal::SelectColumns((nColumns > -1 ? nColumns : sizeof...(BranchTypes)), bl, defBl);
-      unsigned int nSlots = df->GetNSlots();
-      const auto &tmpBranches = df->GetBookedBranches();
-      auto tree = df->GetTree();
+      auto loopManager = GetDataFrameChecked();
+      auto realNColumns = (nColumns > -1 ? nColumns : sizeof...(BranchTypes));
+      const auto validColumnNames = GetValidatedColumnNames(*loopManager, realNColumns, columns);
+      unsigned int nSlots = loopManager->GetNSlots();
+      const auto &tmpBranches = loopManager->GetBookedBranches();
+      auto tree = loopManager->GetTree();
       auto rOnHeap = TDFInternal::MakeSharedOnHeap(r);
-      auto toJit = TDFInternal::JitBuildAndBook(actualBl, GetNodeTypeName(), fProxiedPtr.get(),
+      auto toJit = TDFInternal::JitBuildAndBook(validColumnNames, GetNodeTypeName(), fProxiedPtr.get(),
                                                 typeid(std::shared_ptr<ActionResultType>), typeid(ActionType), rOnHeap,
                                                 tree, nSlots, tmpBranches);
-      df->Jit(toJit);
-      return MakeResultProxy(r, df);
+      loopManager->Jit(toJit);
+      return MakeResultProxy(r, loopManager);
    }
 
    ////////////////////////////////////////////////////////////////////////////
@@ -1144,6 +1138,27 @@ private:
       snapshotTDF.fProxiedPtr->SetTree(std::shared_ptr<TTree>(static_cast<TTree *>(chain)));
 
       return snapshotTDF;
+   }
+
+   ColumnNames_t GetValidatedColumnNames(TLoopManager &lm, const unsigned int nColumns,
+                                                             const ColumnNames_t &userColumns)
+   {
+      const auto &defaultColumns = lm.GetDefaultColumnNames();
+      const auto trueColumns = TDFInternal::SelectColumns(nColumns, userColumns, defaultColumns);
+      const auto unknownColumns = TDFInternal::FindUnknownColumns(trueColumns, lm);
+
+      if (!unknownColumns.empty()) {
+         // throw
+         std::stringstream unknowns;
+         std::string delim = unknownColumns.size() > 1 ? "s: " : ": "; // singular/plural
+         for (auto &unknown : unknownColumns) {
+            unknowns << delim << unknown;
+            delim = ',';
+         }
+         throw std::runtime_error("Unknown column" + unknowns.str());
+      }
+
+      return trueColumns;
    }
 
 protected:
