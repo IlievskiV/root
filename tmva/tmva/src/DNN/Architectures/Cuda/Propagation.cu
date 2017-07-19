@@ -255,7 +255,7 @@ void TCuda<AFloat>::Downsample(TCudaMatrix<AFloat> &A,
 
 }
 
-/____________________________________________________________________________
+//____________________________________________________________________________
 template<typename AFloat>
 void TCuda<AFloat>::MaxPoolLayerBackward(std::vector<TCudaMatrix<AFloat>> & activationGradientsBackward,
                                          const std::vector<TCudaMatrix<AFloat>> & activationGradients,
@@ -265,6 +265,13 @@ void TCuda<AFloat>::MaxPoolLayerBackward(std::vector<TCudaMatrix<AFloat>> & acti
                                          size_t nLocalViews)
 {
 
+}
+
+//____________________________________________________________________________
+template<typename AFloat>
+void TCuda<AFloat>::Reshape(TCudaMatrix<AFloat> &A, const TCudaMatrix<AFloat> &B)
+{
+    
 }
 
 } // namespace DNN
