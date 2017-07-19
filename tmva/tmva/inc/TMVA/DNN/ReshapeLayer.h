@@ -76,7 +76,11 @@ TReshapeLayer<Architecture_t>::TReshapeLayer(size_t batchSize, size_t inputDepth
    : VGeneralLayer<Architecture_t>(batchSize, inputDepth, inputHeight, inputWidth, depth, height, width, 0, 0, 0, 0,
                                    outputNSlices, outputNRows, outputNCols, EInitialization::kZero)
 {
-   // Nothing to do here.
+   if (this->GetInputDepth() * this->GetInputHeight() * this->GetInputWidth() !=
+       this->GetDepth() * this->GetHeight() * this->GetWidth()) {
+      std::cout << "Dimensions not compatible" << std::endl;
+      return;
+   }
 }
 
 //_________________________________________________________________________________________________
@@ -84,6 +88,7 @@ template <typename Architecture_t>
 TReshapeLayer<Architecture_t>::TReshapeLayer(TReshapeLayer<Architecture_t> *layer)
    : VGeneralLayer<Architecture_t>(layer)
 {
+   // Nothing to do here.
 }
 
 //_________________________________________________________________________________________________
@@ -104,6 +109,9 @@ TReshapeLayer<Architecture_t>::~TReshapeLayer()
 template <typename Architecture_t>
 auto TReshapeLayer<Architecture_t>::Forward(std::vector<Matrix_t> input, bool applyDropout) -> void
 {
+   for (size_t i = 0; i < this->GetBatchSize(); i++) {
+      Architecture_t::Reshape(this->GetOutputAt(i), input[i]);
+   }
 }
 
 //_________________________________________________________________________________________________
@@ -111,12 +119,19 @@ template <typename Architecture_t>
 auto TReshapeLayer<Architecture_t>::Backward(std::vector<Matrix_t> &gradients_backward,
                                              const std::vector<Matrix_t> &activations_backward) -> void
 {
+   for (size_t i = 0; i < this->GetBatchSize(); i++) {
+      Architecture_t::Reshape(gradients_backward[i], this->GetActivationGradientsAt(i));
+   }
 }
 
 //_________________________________________________________________________________________________
 template <typename Architecture_t>
 auto TReshapeLayer<Architecture_t>::Print() const -> void
 {
+   std::cout << "\t\t RESHAPE LAYER: " << std::endl;
+   std::cout << "\t\t\t Width = " << this->GetWidth() << std::endl;
+   std::cout << "\t\t\t Height = " << this->GetHeight() << std::endl;
+   std::cout << "\t\t\t Depth = " << this->GetDepth() << std::endl;
 }
 
 } // namespace DNN
